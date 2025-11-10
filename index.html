@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Drag & Drop ushtrime</title>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --card:#111827;
+      --text:#e5e7eb;
+      --accent:#60a5fa;
+      --green:#10b981;
+      --red:#ef4444;
+      --ring:#94a3b8;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',sans-serif;
+      background:radial-gradient(1000px 500px at 80% 20%, #1f2937 0%, var(--bg) 60%);
+      color:var(--text);
+    }
+    .container{
+      width:min(1100px, 92vw);
+      background:linear-gradient(180deg,#0b1022 0%, #0c1328 100%);
+      border:1px solid #1f2937; border-radius:20px; padding:28px; box-shadow:0 30px 60px rgba(0,0,0,.35);
+    }
+    header{display:flex; align-items:center; gap:14px; margin-bottom:18px}
+    .tag{padding:6px 10px; border-radius:999px; background:#0b1a35; border:1px solid #203a6b; color:#93c5fd; font-size:12px}
+    h1{font-size:20px; margin:0}
+    .section-title{margin:18px 0 10px; font-size:16px; color:#cbd5e1}
+
+    .grid{
+      display:grid; grid-template-columns: 1fr 380px; gap:24px;
+    }
+
+    /* Rrathet (droppable) */
+    .targets{
+      display:grid; grid-template-columns: repeat(3, 1fr); gap:18px; padding:12px;
+    }
+    .circle{
+      position:relative;
+      aspect-ratio:1/1; border-radius:50%;
+      background:linear-gradient(180deg,#0d1b2a 0%, #0b1422 100%);
+      border:2px dashed var(--ring);
+      display:flex; align-items:center; justify-content:center;
+      transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease, background .2s ease;
+      box-shadow:inset 0 0 30px rgba(148,163,184,.08);
+      user-select:none;
+      padding:12px;
+      flex-direction:column;
+      gap:8px;
+      min-height:160px;
+    }
+    .circle:hover{transform:translateY(-2px)}
+    .circle .label{
+      pointer-events:none; text-align:center; font-size:14px; color:#cbd5e1;
+    }
+    .circle.dragover{
+      border-color:var(--accent);
+      box-shadow:inset 0 0 0 2px rgba(96,165,250,.35), 0 10px 20px rgba(14,165,233,.15);
+    }
+
+    /* Sukses / Gabim */
+    .circle.correct, .blank.correct{
+      border-color:var(--green);
+      background:radial-gradient(120px 120px at 50% 30%, rgba(16,185,129,.2) 0%, transparent 60%), linear-gradient(180deg,#0c1f1a 0%, #0a1714 100%);
+      box-shadow:inset 0 0 0 2px rgba(16,185,129,.35), 0 12px 24px rgba(16,185,129,.25);
+      animation:pop .28s ease-out;
+    }
+    .circle.incorrect, .blank.incorrect{
+      border-color:var(--red);
+      background:radial-gradient(120px 120px at 50% 30%, rgba(239,68,68,.18) 0%, transparent 60%), linear-gradient(180deg,#1a0c0c 0%, #160a0a 100%);
+      box-shadow:inset 0 0 0 2px rgba(239,68,68,.35), 0 12px 24px rgba(239,68,68,.18);
+      animation:shake .42s cubic-bezier(.36,.07,.19,.97);
+    }
+    @keyframes pop{
+      0%{transform:scale(.96)}
+      60%{transform:scale(1.06)}
+      100%{transform:scale(1)}
+    }
+    @keyframes shake{
+      10%,90%{transform:translateX(-1px)}
+      20%,80%{transform:translateX(2px)}
+      30%,50%,70%{transform:translateX(-4px)}
+      40%,60%{transform:translateX(4px)}
+    }
+
+    /* Badge OK që ngrihet */
+    .ok-badge{
+      position:absolute; left:50%; transform:translateX(-50%) translateY(10px);
+      bottom:-12px; background:#052e24; border:1px solid #0a5b45; color:#34d399;
+      padding:6px 10px; border-radius:999px; font-size:12px; opacity:0; pointer-events:none;
+    }
+    .circle.correct .ok-badge,
+    .blank.correct .ok-badge{
+      animation:rise .9s ease-out forwards;
+    }
+    @keyframes rise{
+      0%{opacity:0; transform:translateX(-50%) translateY(8px)}
+      40%{opacity:1}
+      100%{opacity:1; transform:translateX(-50%) translateY(-24px)}
+    }
+
+    /* Zona e përgjigjeve (draggable) */
+    .answers{
+      background:#0b1422; border:1px solid #1f2937; border-radius:14px; padding:16px;
+      display:flex; flex-wrap:wrap; gap:10px;
+    }
+    .answers h2{margin:0 0 12px 0; font-size:16px; color:#cbd5e1}
+    .bank{display:flex; flex-wrap:wrap; gap:10px}
+    .chip, .answer, .option{
+      background:#0e1b2f; color:#dbeafe; border:1px solid #243b63;
+      padding:10px 12px; border-radius:999px; font-size:14px; cursor:grab; user-select:none;
+      transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .chip:active, .answer:active, .option:active{cursor:grabbing}
+    .chip:hover, .answer:hover, .option:hover{transform:translateY(-2px); box-shadow:0 8px 20px rgba(59,130,246,.18)}
+    .chip.dragging, .answer.dragging, .option.dragging{opacity:.75; transform:scale(.98)}
+
+    /* Ushtrimi me fjali */
+    .sentences{
+      margin-top:24px; padding:16px;
+      background:#0b1422; border:1px solid #1f2937; border-radius:14px;
+    }
+    .sentence{
+      background:linear-gradient(180deg,#0d1b2a 0%, #0b1422 100%);
+      border:1px dashed var(--ring);
+      border-radius:12px; padding:12px; margin-bottom:14px;
+    }
+    .sentence .text{
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:15px; color:#cbd5e1;
+    }
+    .blank{
+      position:relative;
+      min-width:120px; min-height:38px;
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:6px 10px; border-radius:10px; border:2px dashed var(--ring);
+      background:rgba(2,6,23,.4);
+      transition:border-color .2s ease, box-shadow .2s ease, background .2s ease, transform .2s ease;
+    }
+    .blank.dragover{
+      border-color:var(--accent);
+      box-shadow:inset 0 0 0 2px rgba(96,165,250,.35), 0 10px 20px rgba(14,165,233,.15);
+    }
+    .blank .ok-badge{
+      bottom:-16px;
+    }
+
+    .options{
+      margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;
+    }
+
+    /* Confetti */
+    .confetti{
+      position:fixed; inset:0; pointer-events:none; overflow:hidden;
+      z-index:9999;
+    }
+    .piece{
+      position:absolute; width:8px; height:14px; border-radius:2px;
+      animation:fall linear forwards;
+    }
+    @keyframes fall{
+      0%{transform:translateY(-20px) rotate(0deg); opacity:1}
+      80%{opacity:1}
+      100%{transform:translateY(100vh) rotate(720deg); opacity:0}
+    }
+
+    .help{margin-top:10px; font-size:12px; color:#94a3b8}
+
+    /* --- Tregimi --- */
+    .tregimi{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      min-height: 140px;
+      padding: 18px;
+    }
+    .tregimi h1{ margin: 0; font-size: 18px; }
+    .tregimi p{margin:6px 0; color:#cbd5e1}
+
+    /* character analysis layout */
+    .zone-container{ display:flex; gap:14px; margin-top:18px; align-items:flex-start; flex-wrap:wrap }
+    .dropzone-title{ font-size:13px; color:#cbd5e1; margin-bottom:6px; text-align:center }
+    .dropzone-list{ display:flex; flex-direction:column; gap:12px; width:100%; }
+    .dropzone{
+      min-height:72px; border-radius:10px; padding:12px; border:2px dashed var(--ring);
+      background:linear-gradient(180deg,#07101a 0%, #06121b 100%);
+      color:#cbd5e1;
+      display:flex; align-items:center; gap:10px; justify-content:center; text-align:center;
+    }
+    .dropzone.dragover{ border-color:var(--accent); box-shadow:0 10px 30px rgba(96,165,250,.08)}
+    .controls{ display:flex; gap:8px; margin-top:12px; }
+    .btn{
+      background:#0b1a35; border:1px solid #203a6b; color:#93c5fd; padding:8px 12px; border-radius:8px; cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- Tregimi vendosur ne fillim te containerit dhe marre dizajnin e faqes -->
+    <h1>Gjeogafi Website</h1>
+    <div class="tregimi" aria-hidden="false">
+      <h1>Tema:</h1>
+      <h1>Gjeografia e bujqesise</h1>
+      <p>Rezultatet e te nxenit</p>
+      <p>Evidenton perhapjen e kultrore bujqesore ne Europe.</p>
+      <p>Rendit disa nga vecorite kryesore te bujqesise edhe blegtorise.</p>
+      <p>Pershkruan gjendjen e pyejeve dhe peshkimit ne Europe.</p>
+      <p>Burimet qe do perdornim:</p>
+      <p>Teksti gjeografia 8,</p>
+      <p>Harta e Europes,</p>
+      <p>Atlase</p>
+      <p>Kompjutera</p>
+      <p>Programe kompjuterike.</p>
+      <p>Fjalet kyce:</p>
+      <p>Bujqesia, kulturat bujqesore, frutikultura, blegtoria, pylltaria, peshkimi.</p>
+    </div>
+
+    <!-- SEKSIONI 2: 4 fjali me kuti alternativash -->
+    <h2 class="section-title">1.|Ploteso vendet bosh ne fjali me alternativat e dhena.</h2>
+    <div class="sentences">
+
+      <!-- FJALIA 1 -->
+      <div class="sentence">
+        <div class="text">
+          <span>1.</span>
+          <div class="blank" data-expects="Ulliri" aria-label="Vend bosh">
+            <div class="ok-badge">OK ✔</div>
+          </div>
+          <span>eshte nje bime tipike mesdhetare.</span>
+        </div>
+        <div class="options">
+          <div class="option" draggable="true" data-answer="Gruri">Gruri</div>
+          <div class="option" draggable="true" data-answer="Ulliri">Ulliri</div>
+          <div class="option" draggable="true" data-answer="Orizi">Orizi</div>
+        </div>
+      </div>
+
+      <!-- FJALIA 2 -->
+      <div class="sentence">
+        <div class="text">
+          <span>2.</span>
+          <span>Hapesirat e mbjella me grure shtrihen pothuajse ne te gjithe Europen,perjashtim vetem</span>
+          <div class="blank" data-expects="rajonet veriore" aria-label="Vend bosh">
+            <div class="ok-badge">OK ✔</div>
+          </div>
+          <span>.</span>
+        </div>
+        <div class="options">
+          <div class="option" draggable="true" data-answer="rajonet perendimore">rajonet perendimore</div>
+          <div class="option" draggable="true" data-answer="rajonet veriore">rajonet veriore</div>
+          <div class="option" draggable="true" data-answer="rajonet lindore">rajonet perendimore</div>
+        </div>
+      </div>
+
+      <!-- FJALIA 3 -->
+      <div class="sentence">
+        <div class="text">
+          <span>3.</span>
+          <div class="blank" data-expects="Mushkerite e gjelberta" aria-label="Vend bosh">
+            <div class="ok-badge">OK ✔</div>
+          </div>
+          <span>perfaqesohen  nga pyjet konifere te rajoneve veriore.</span>
+        </div>
+        <div class="options">
+          <div class="option" draggable="true" data-answer="Pyjet">Pyjet</div>
+          <div class="option" draggable="true" data-answer="Mushkerite e gjelberta">Mushkerite e gjelberta</div>
+          <div class="option" draggable="true" data-answer="Bimesia">Bimesia</div>
+        </div>
+      </div>
+
+      <!-- FJALIA 4 -->
+      <div class="sentence">
+        <div class="text">
+          <span>4.</span>
+          <span>Ne Europe tokat </span>
+          <div class="blank" data-expects="e kultivuara" aria-label="Vend bosh">
+            <div class="ok-badge">OK ✔</div>
+          </div>
+          <span>zene 30% te siperfaqes se kontinentit.</span>
+        </div>
+        <div class="options">
+          <div class="option" draggable="true" data-answer="te lena djer">e lena djer</div>
+          <div class="option" draggable="true" data-answer="e kultivuara">e kultivuara</div>
+          <div class="option" draggable="true" data-answer="te braktisura">e braktisura</div>
+        </div>
+      </div>
+
+      <div class="help">Zvarrit kutinë e alternativës dhe lëshoje te vendi bosh. Vetëm një përgjigje është e saktë për çdo fjali.</div>
+    </div>
+
+    <header style="margin-top:18px;">
+      <span class="tag">Ushtrime drag & drop</span>
+    </header>
+
+    <!-- SEKSIONI: Analize Personazhesh me 3 rrethe dhe 3 lloje alternativash -->
+    <h2 class="section-title" style="margin-top:18px;">2.|Vendosni pohimet perkatese ne diagramin perkates</h2>
+
+    <div class="zone-container">
+      <!-- Tre rrathët (targets) -->
+      <div style="flex:1; min-width:240px;">
+        <div class="dropzone-title">Personazhet</div>
+        <div class="targets">
+          <div class="circle drop-target" data-correct="A" aria-label="Personazhi A">
+            <div class="label">Rajonet Qendrore dhe Veriore</div>
+            <div class="ok-badge">OK ✔</div>
+          </div>
+          <div class="circle drop-target" data-correct="B" aria-label="Personazhi B">
+            <div class="label">Rajonet Mesdhetare</div>
+            <div class="ok-badge">OK ✔</div>
+          </div>
+          <div class="circle drop-target" data-correct="C" aria-label="Personazhi C">
+            <div class="label">Rajonet Lindore</div>
+            <div class="ok-badge">OK ✔</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bankat e alternativave (3 lloje: A, B, C) -->
+      <div style="width:360px;">
+        <div class="dropzone-title">Tiparet (zvarrit në rrath)</div>
+        <div class="answers" id="character-answers">
+          <!-- Për çdo alternativë vendosim data-answer A/B/C -->
+          <div class="answer" draggable="true" data-answer="A">rreshje te rregullta</div>
+          <div class="answer" draggable="true" data-answer="C">mungese makinersh</div>
+          <div class="answer" draggable="true" data-answer="B">Hardhia</div>
+          <div class="answer" draggable="true" data-answer="A">foragjere</div>
+          <div class="answer" draggable="true" data-answer="B">fruti kultura</div>
+          <div class="answer" draggable="true" data-answer="C">veshtiresi nga konkurenca perendimore</div>
+          <div class="answer" draggable="true" data-answer="B">misri</div>
+          <div class="answer" draggable="true" data-answer="A">ultersira Gjermane</div>
+          <div class="answer" draggable="true" data-answer="A">elb</div>
+          <div class="answer" draggable="true" data-answer="B">Italia</div>
+          <div class="answer" draggable="true" data-answer="A">Franceze</div>
+          <div class="answer" draggable="true" data-answer="B">Spanja</div>
+          <div class="answer" draggable="true" data-answer="A">ultersira</div>
+          <div class="answer" draggable="true" data-answer="C">mungese plehrash kimike</div>
+          <div class="answer" draggable="true" data-answer="B">bujqesia e zhvilluar</div>
+          <div class="answer" draggable="true" data-answer="A">thekri</div>
+          <div class="answer" draggable="true" data-answer="B">ulliri</div>
+          <div class="answer" draggable="true" data-answer="A">panxhar sheqeri</div>
+          <div class="answer" draggable="true" data-answer="C">Dritherat</div>
+          <div class="answer" draggable="true" data-answer="B">55% </div>
+          <div class="answer" draggable="true" data-answer="A">grure</div>
+          <div class="answer" draggable="true" data-answer="C">rendimenti I ulet</div>
+          <div class="answer" draggable="true" data-answer="A">tershera</div>
+          <div class="answer" draggable="true" data-answer="B">Franca</div>
+          <div class="answer" draggable="true" data-answer="A">Birra</div>
+          <div class="answer" draggable="true" data-answer="B">bimet vajore</div>
+           
+
+          
+          
+        </div>
+
+        <div class="controls">
+          <button class="btn" id="resetBtn">Reset</button>
+          <button class="btn" id="checkAllBtn">Kontrollo të gjitha</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confetti" class="confetti" aria-hidden="true"></div>
+
+    <!-- Copyright section -->
+    <div style="
+      margin-top: 40px;
+      padding: 20px;
+      text-align: center;
+      border-top: 1px solid #1f2937;
+    ">
+      <p style="margin: 0; color: var(--text); font-size: 14px;">
+        <div style="display: inline-flex; align-items: center; gap: 10px;">
+    <span style="font-size: 19px;">Powered by:</span>
+    <img src="JX Platforms Inc.jpg" alt="Screenshot" width="140" height="auto" style="display: block;">
+  </div>
+      </p>
+    </div>
+
+  </div>
+
+  <script>
+    // Vendos id unike dhe ruaj origin për të gjitha elementët draggable
+    (function initDraggables(){
+      let count = 1;
+      const draggables = document.querySelectorAll('.option, .answer');
+      draggables.forEach(el => {
+        el.setAttribute('draggable','true');
+        if(!el.id) el.id = 'd-' + (count++);
+        // ruaj parentin origjinal (si selector) për të kthyer në reset
+        el.dataset.origin = el.parentElement.id || Array.from(el.parentElement.classList).join('.');
+      });
+    })();
+
+    // Helper për gjetjen e container origin bazuar në dataset.origin
+    function findOriginContainer(origin) {
+      // provoni me id ose me klasë të parent
+      if(!origin) return null;
+      let byId = document.getElementById(origin);
+      if(byId) return byId;
+      // nëse origin është një listë klasash e ndarë me pika, zgjedhim elementin me të njëjtat klasa në DOM
+      try {
+        const sel = origin.split('.').map(s => '.' + s).join('');
+        const el = document.querySelector(sel);
+        if(el) return el;
+      } catch(e){}
+      // fallback: kthe banka character-answers
+      return document.getElementById('character-answers');
+    }
+
+    // Drag events
+    document.addEventListener('dragstart', e => {
+      const t = e.target;
+      if(t && (t.classList.contains('option') || t.classList.contains('answer'))) {
+        e.dataTransfer.setData('text/plain', JSON.stringify({id: t.id, answer: t.dataset.answer || ''}));
+        t.classList.add('dragging');
+      }
+    });
+    document.addEventListener('dragend', e => {
+      const t = e.target;
+      if(t && (t.classList.contains('option') || t.classList.contains('answer'))) {
+        t.classList.remove('dragging');
+      }
+    });
+
+    // Allow drops on blanks and circles
+    const blanks = document.querySelectorAll('.blank');
+    const circles = document.querySelectorAll('.drop-target');
+    const dropTargets = [...blanks, ...circles];
+
+    dropTargets.forEach(zone => {
+      zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+      zone.addEventListener('dragleave', e => {
+        zone.classList.remove('dragover');
+      });
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const data = e.dataTransfer.getData('text/plain');
+        if(!data) return;
+        let parsed;
+        try { parsed = JSON.parse(data); } catch(err){ return; }
+        const dragged = document.getElementById(parsed.id);
+        if(!dragged) return;
+
+        // Nëse zona është blank (vetëm 1 element), kthe elementin ekzistues në origin
+        if(zone.classList.contains('blank')) {
+          // heq çdo element draggable të brendshëm (përjashto ok-badge)
+          const existing = Array.from(zone.children).find(c => (c.classList && (c.classList.contains('option') || c.classList.contains('answer'))));
+          if(existing && existing.id !== dragged.id) {
+            const originContainer = findOriginContainer(existing.dataset.origin);
+            if(originContainer) originContainer.appendChild(existing);
+          }
+          // vendos elementin e ri brenda
+          zone.appendChild(dragged);
+        } else {
+          // për rrathë lejojmë shumë elementë; thjesht shtojmë në fund
+          zone.appendChild(dragged);
+        }
+
+        // Kontrollo përgjigjen për zottedhënien
+        checkDrop(zone, dragged);
+      });
+    });
+
+    // Kontrollimi i përgjigjes
+    function checkDrop(zone, dragged) {
+      // hallka për të marre vlerën e saktë të zones
+      const correct = (zone.dataset.expects || zone.dataset.correct || '').toString().trim().toLowerCase();
+      const answer = (dragged.dataset.answer || '').toString().trim().toLowerCase();
+
+      // Për blanket krahasojme tekst me tekst (mund normalizuar uppercase)
+      let isCorrect = false;
+      if(zone.classList.contains('blank')) {
+        isCorrect = (correct === answer);
+      } else {
+        // rrath -> krahasojmë letra A/B/C
+        isCorrect = (correct === answer);
+      }
+
+      // hiq klasat e mëparshme
+      zone.classList.remove('incorrect','correct');
+      dragged.classList.remove('incorrect','correct');
+
+      if(isCorrect) {
+        zone.classList.add('correct');
+        dragged.classList.add('correct');
+      } else {
+        zone.classList.add('incorrect');
+        dragged.classList.add('incorrect');
+        // hiq incorrect pas animacionit
+        setTimeout(() => {
+          zone.classList.remove('incorrect');
+          dragged.classList.remove('incorrect');
+        }, 1000);
+      }
+
+      // kur të gjithë të plotësohen saktë mund të nxjerrim confetti
+      setTimeout(() => {
+        if(allCorrect()) {
+          launchConfetti();
+        }
+      }, 250);
+    }
+
+    // Funksion për kontrollin e gjendjes së gjithë hedefeve (blanks dhe rrathë)
+    function allCorrect() {
+      // kontrollo të gjitha blanks dhe circles që kanë një element draggable brenda dhe të jenë marked correct
+      const allZones = document.querySelectorAll('.blank, .drop-target');
+      for(const z of allZones) {
+        const hasDraggable = Array.from(z.children).some(c => c.classList && (c.classList.contains('option') || c.classList.contains('answer')));
+        if(!hasDraggable) return false;
+        if(!z.classList.contains('correct')) return false;
+      }
+      return true;
+    }
+
+    // Kontrollo të gjitha me buton
+    document.getElementById('checkAllBtn').addEventListener('click', () => {
+      const allZones = document.querySelectorAll('.blank, .drop-target');
+      allZones.forEach(zone => {
+        // gjej elementin draggable brenda
+        const dragged = Array.from(zone.children).find(c => c.classList && (c.classList.contains('option') || c.classList.contains('answer')));
+        if(dragged) checkDrop(zone, dragged);
+      });
+    });
+
+    // Reset
+    document.getElementById('resetBtn').addEventListener('click', resetAll);
+    function resetAll(){
+      // hiq confetti
+      const conf = document.getElementById('confetti');
+      conf.innerHTML = '';
+      // për çdo draggable ktheje ne origin
+      const allDraggables = document.querySelectorAll('.option, .answer');
+      allDraggables.forEach(d => {
+        const originContainer = findOriginContainer(d.dataset.origin);
+        if(originContainer) originContainer.appendChild(d);
+        d.classList.remove('correct','incorrect','dragging');
+      });
+      // hiq klase nga zones
+      const allZones = document.querySelectorAll('.blank, .drop-target');
+      allZones.forEach(z => z.classList.remove('correct','incorrect','dragover'));
+    }
+
+    // Confetti
+    function launchConfetti(){
+      const colors = ['#ff4d4f','#f59e0b','#10b981','#60a5fa','#a78bfa','#f97316','#ef4444'];
+      const container = document.getElementById('confetti');
+      container.innerHTML = '';
+      for(let i=0;i<40;i++){
+        const piece = document.createElement('div');
+        piece.className = 'piece';
+        piece.style.left = Math.random()*100 + 'vw';
+        piece.style.top = (-10 - Math.random()*50) + 'px';
+        piece.style.background = colors[Math.floor(Math.random()*colors.length)];
+        piece.style.transform = 'rotate(' + (Math.random()*360) + 'deg)';
+        piece.style.animationDuration = (3 + Math.random()*2) + 's';
+        piece.style.opacity = Math.random()*0.9 + 0.1;
+        container.appendChild(piece);
+        // pasanimacioni hiq
+        (function(p){
+          setTimeout(()=> p.remove(), 6000);
+        })(piece);
+      }
+    }
+
+    
+    
+
+    // ARIA: mundëso focus dhe drop me keyboard (opsional - bazik)
+    // Lehtësojmë selektimin e elementeve për përdorues keyboard por jo implementohen drag/drop keyboard ndërgjegjshëm këtu.
+    // (Kjo pjesë mund përmirësohet për aksesibilitet më të mirë.)
+
+  </script>
+
+</body>
+</html>
